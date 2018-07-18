@@ -1,0 +1,21 @@
+"0","d_people <- d.norm %>%
+  group_by(subid)%>%
+  summarise(exclusions = sum(excl)) %>%
+  arrange(exclusions)
+d.norm<- d.norm %>%
+  left_join(d_people)
+"
+"2","Joining, by = ""subid""
+"
+"0","d_noexc <- d.norm%>%"
+"0","  filter(exclusions <6)%>%"
+"0","  filter(!excl)"
+"0","length(unique(d_noexc$workerid))"
+"1","[1]"
+"1"," 119"
+"1","
+"
+"0","d.norm.means <- d.norm %>%"
+"0","  filter(type==""targ"")%>%"
+"0","  group_by(noun,condition) %>%"
+"0","  summarise(mean = mean(rating))"

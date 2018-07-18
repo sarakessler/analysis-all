@@ -1,0 +1,618 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+#read in data from replication of tribushinina
+library(tidyverse)
+library(stringr)
+library(rjson)
+library(ordinal)
+library(coin)
+library(lme4)
+#library(AICcmodavg)
+
+sem <- function(x) {sd(x, na.rm=TRUE) / sqrt(length(x))}
+ci95 <- function(x) {sem(x) * 1.96}
+addnas <- function (x) {if (length(x)==0){
+  result = NA
+} else {result = x}
+  return(result)
+}
+
+####Import data
+
+path_rep <- "D:/Dropbox/School/more adjs/experiment 1b/analysis-all/Trib2011-1-rep/"
+files_rep <- dir("D:/Dropbox/School/more adjs/experiment 1b/analysis-all/Trib2011-1-rep/anonymized-results", 
+             pattern = "*.json")
+
+NUM_TRIALS <- 50
+d.raw.rep <- data.frame()
+
+for (f in files_rep) {
+  jf <- paste0(path_rep, "anonymized-results/",f)
+  jd <- fromJSON(file = jf)
+  id <- data.frame(subid = f,
+                   exp_name = "rep",
+                   unique_id = paste0("rep_", f),
+                   adj = jd$answers$data$adj,
+                   verb = jd$answers$data$verb,
+                   noun = jd$answers$data$noun,
+                   dir = jd$answers$data$dir,
+                   num_checked = as.numeric(jd$answers$data$num_checked),
+                   quest_order = c(1:NUM_TRIALS),
+                   noun = jd$answers$data$noun,
+                   elapsed_ms = jd$answers$data$elapsed_ms,
+                   elapsed_first_click_ms = jd$answers$data$elapsed_first_click_ms,
+                   workerid = jd$WorkerId,
+                   language = tolower(jd$answers$data$lang),
+                   gender = jd$answers$data$gender,
+                   prototype_status = jd$answers$data$prototype_status,
+                   non_consec = jd$answers$data$non_consecutive,
+                   is_endpoint = jd$answers$data$is_endpoint,
+                   endpoint = as.character(unlist(jd$answers$data$endpoint)),
+                   good_endpoint = jd$answers$data$good_ep,
+                   none_checked = jd$answers$data$none_checked,
+                   screen_size = as.numeric(jd$answers$data$screen_size))
+                    
+                  
+  d.raw.rep <- bind_rows(d.raw.rep, id)
+}
+```
+
+```{r}
+
+#cleans up unpredictable typos in language name
+table(as.factor(d.raw.rep$language))
+for (i in 1:length(d.raw.rep$language)) {
+   if (d.raw.rep$language[i] == "ebglish" & (!is.na(d.raw.rep$language[i]))){
+   d.raw.rep$language[i] = "english"
+   }
+}
+num_trials = 48
+
+#filters out non native speakers, screens under 12 inches, people with too many non-consecutive or no endpoint trials, and all non-consecutive, no endpoint or wrong endpoint trials.
+d.rep <- filter(d.raw.rep, prototype_status != "na") %>%
+  filter(as.numeric(screen_size) >= 12) %>%
+  filter(str_detect(language, 'eng')) %>%
+  select(-language) %>%
+  group_by(subid) %>%
+  mutate(perc_non_consec = sum(non_consec)/num_trials,
+            perc_no_endpoint = (length(is_endpoint)-sum(is_endpoint))/num_trials,
+         perc_good_endpoint = (sum(good_endpoint))/num_trials) %>%
+  filter(perc_non_consec < .1) %>%
+  filter(perc_good_endpoint >.9) %>%
+  filter(is_endpoint == TRUE) %>%
+  filter(good_endpoint == TRUE) %>%
+  filter(non_consec == FALSE)
+for (i in 1:length(d.rep$none_checked)) {
+   if (d.rep$none_checked[i] == TRUE & (!is.na(d.rep$none_checked[i]))){
+   d.rep$num_checked[i] = 0
+   }
+ }
+
+```
+
+```{r}
+#read in data from Trib2011 replication with ducklings and bunnies
+path_bunny <- "D:/Dropbox/School/more adjs/experiment 1b/analysis-all/Trib2011-2-bunnies/"
+files_bunny <- dir("D:/Dropbox/School/more adjs/experiment 1b/analysis-all/Trib2011-2-bunnies/anonymized-results", 
+             pattern = "*.json")
+
+NUM_TRIALS <- 50
+d.raw.bunny <- data.frame()
+
+for (f in files_bunny) {
+  jf <- paste0(path_bunny, "anonymized-results/",f)
+  jd <- fromJSON(file = jf)
+  id <- data.frame(subid = f,
+                   exp_name = "bunny",
+                   unique_id = paste0("bunny_", f),
+                   adj = jd$answers$data$adj,
+                   verb = jd$answers$data$verb,
+                   noun = jd$answers$data$noun,
+                   dir = jd$answers$data$dir,
+                   num_checked = as.numeric(jd$answers$data$num_checked),
+                   quest_order = c(1:NUM_TRIALS),
+                   noun = jd$answers$data$noun,
+                   elapsed_ms = jd$answers$data$elapsed_ms,
+                   elapsed_first_click_ms = jd$answers$data$elapsed_first_click_ms,
+                   workerid = jd$WorkerId,
+                   language = tolower(jd$answers$data$lang),
+                   gender = jd$answers$data$gender,
+                   prototype_status = jd$answers$data$prototype_status,
+                   non_consec = jd$answers$data$non_consecutive,
+                   is_endpoint = jd$answers$data$is_endpoint,
+                   endpoint = as.character(unlist(jd$answers$data$endpoint)),
+                   good_endpoint = jd$answers$data$good_ep,
+                   none_checked = jd$answers$data$none_checked,
+                   screen_size = as.numeric(jd$answers$data$screen_size))
+                    
+                  
+  d.raw.bunny <- bind_rows(d.raw.bunny, id)
+}
+```
+
+```{r}
+#filters out non native speakers, screens under 12 inches, people with too many non-consecutive or no endpoint trials, and all non-consecutive, no endpoint or wrong endpoint trials.
+d.bunny <- filter(d.raw.bunny, prototype_status != "na") %>%
+  filter(as.numeric(screen_size) >= 12) %>%
+  filter(str_detect(language, 'eng')) %>%
+  select(-language) %>%
+  group_by(subid) %>%
+  mutate(perc_non_consec = sum(non_consec)/num_trials,
+            perc_no_endpoint = (length(is_endpoint)-sum(is_endpoint))/num_trials,
+         perc_good_endpoint = (sum(good_endpoint))/num_trials) %>%
+  filter(perc_non_consec < .1) %>%
+  filter(perc_good_endpoint >.9) %>%
+  filter(is_endpoint == TRUE) %>%
+  filter(good_endpoint == TRUE) %>%
+  filter(non_consec == FALSE)
+for (i in 1:length(d.bunny$none_checked)) {
+   if (d.bunny$none_checked[i] == TRUE & (!is.na(d.bunny$none_checked[i]))){
+   d.bunny$num_checked[i] = 0
+   }
+ }
+```
+
+
+```{r}
+#read in data for reverse tribushinina
+path_rev <- "D:/Dropbox/School/more adjs/experiment 1b/analysis-all/Rev-Trib/"
+files_rev <- dir("D:/Dropbox/School/more adjs/experiment 1b/analysis-all/Rev-Trib/anonymized-results", 
+             pattern = "*.json")
+
+NUM_TRIALS <- 50
+d.raw.rev <- data.frame()
+
+for (f in files_rev) {
+  jf <- paste0(path_rev, "anonymized-results/",f)
+  jd <- fromJSON(file = jf)
+  id <- data.frame(subid = f,
+                   exp_name = "rev",
+                   unique_id = paste0("rev_", f),
+                   adj = jd$answers$data$adj,
+                   verb = jd$answers$data$verb,
+                   noun = jd$answers$data$noun,
+                   dir = jd$answers$data$dir,
+                   num_checked = as.numeric(jd$answers$data$num_checked),
+                   quest_order = c(1:NUM_TRIALS),
+                   noun = jd$answers$data$noun,
+                   elapsed_ms = jd$answers$data$elapsed_ms,
+                   elapsed_first_click_ms = jd$answers$data$elapsed_first_click_ms,
+                   workerid = jd$WorkerId,
+                   language = tolower(jd$answers$data$lang),
+                   gender = jd$answers$data$gender,
+                   prototype_status = jd$answers$data$prototype_status,
+                   non_consec = jd$answers$data$non_consecutive,
+                   is_endpoint = jd$answers$data$is_endpoint,
+                   endpoint = as.character(unlist(jd$answers$data$endpoint)),
+                   good_endpoint = jd$answers$data$good_ep,
+                   none_checked = jd$answers$data$none_checked,
+                   screen_size = as.numeric(jd$answers$data$screen_size))
+                    
+                  
+  d.raw.rev <- bind_rows(d.raw.rev, id)
+}
+
+```
+
+```{r}
+#filters out non native speakers, screens under 12 inches, people with too many non-consecutive or no endpoint trials, and all non-consecutive, no endpoint or wrong endpoint trials.
+d.rev <- d.raw.rev %>%
+  filter(adj !="pretty") %>%
+  filter(adj != "ugly")%>%
+  filter(as.numeric(screen_size) >= 12) %>%
+  filter(str_detect(language, 'eng')) %>%
+  select(-language) %>%
+  group_by(subid) %>%
+  mutate(perc_non_consec = sum(non_consec)/num_trials,
+            perc_no_endpoint = (length(is_endpoint)-sum(is_endpoint))/num_trials,
+         perc_good_endpoint = (sum(good_endpoint))/num_trials) %>%
+  filter(perc_non_consec < .1) %>%
+  filter(perc_good_endpoint >.9) %>%
+  filter(is_endpoint == TRUE) %>%
+  filter(good_endpoint == TRUE) %>%
+  filter(non_consec == FALSE)
+for (i in 1:length(d.rev$none_checked)) {
+   if (d.rev$none_checked[i] == TRUE & (!is.na(d.rev$none_checked[i]))){
+   d.rev$num_checked[i] = 0
+   }
+ }
+```
+
+
+```{r}
+#read in data from three conditions - condition 1 - ordered photographs, condition 2 - random order photographs, condition 3 - random order tiny things
+path_3cond <- "D:/Dropbox/School/more adjs/experiment 1b/analysis-all/3conditions/"
+files_3cond <- dir("D:/Dropbox/School/more adjs/experiment 1b/analysis-all/3conditions/anonymized-results", 
+             pattern = "*.json")
+
+
+d.raw.3cond <- data.frame()
+
+for (f in files_3cond) {
+  jf <- paste0(path_3cond, "anonymized-results/",f)
+  jd <- fromJSON(file = jf)
+  if (is.element(1,jd$answers$data$expt_condition)){
+    NUM_TRIALS <- 50
+  } else{
+    NUM_TRIALS <- 26
+  }
+  NUM_TARGETS <- NUM_TRIALS - 2
+  id <- data.frame(subid = f,
+                   exp_name = "3cond",
+                   unique_id = paste0("3cond_", f),
+                   condition = jd$answers$data$expt_condition,
+                   number_of_trials = NUM_TRIALS,
+                   number_of_targets = NUM_TARGETS,
+                   adj = jd$answers$data$adj,
+                   verb = jd$answers$data$verb,
+                   noun = jd$answers$data$noun,
+                   dir = as.character(cbind(jd$answers$data$dir)),
+                   num_checked = as.numeric(jd$answers$data$num_checked),
+                   quest_order = c(1:NUM_TRIALS),
+                   elapsed_ms = jd$answers$data$elapsed_ms,
+                   elapsed_first_click_ms = jd$answers$data$elapsed_first_click_ms,
+                   workerid = jd$WorkerId,
+                   language = tolower(jd$answers$data$lang),
+                   gender = jd$answers$data$gender,
+                   prototype_status = jd$answers$data$prototype_status,
+                   non_consec = jd$answers$data$non_consecutive,
+                   is_endpoint = jd$answers$data$is_endpoint,
+                   endpoint = as.character(unlist(jd$answers$data$endpoint)),
+                   good_endpoint = jd$answers$data$good_ep,
+                   none_checked = jd$answers$data$none_checked,
+                   all_checked = jd$answers$data$all_checked,
+                   comments = jd$answers$data$expt_gen,
+                   screen_size = as.numeric(jd$answers$data$screen_size))
+                    
+                  
+  d.raw.3cond <- bind_rows(d.raw.3cond, id)
+}
+```
+
+```{r}
+#clean up language typos
+table(as.factor(d.raw.3cond$language))
+for (i in 1:length(d.raw.3cond$language)) {
+   if (d.raw.3cond$language[i] == "rnglish" & (!is.na(d.raw.3cond$language[i]))){
+   d.raw.3cond$language[i] = "english"
+   }
+ }
+
+```
+
+```{r}
+#exclude people for language, screen size, too many non-consecutive or no-endpoint trials, and trials with no endpoint or non-consecutive.
+d.3cond <- d.raw.3cond %>%
+  filter(verb == "are") %>%
+  filter(adj !="pretty") %>%
+  filter(adj != "ugly")%>%
+  filter(as.numeric(screen_size) >= 12) %>%
+  filter(str_detect(language, 'eng')) %>%
+  select(-language) %>%
+  group_by(subid) %>%
+  mutate(perc_non_consec = sum(non_consec)/number_of_targets,
+            perc_no_endpoint = (length(is_endpoint)-sum(is_endpoint))/number_of_targets,
+         perc_good_endpoint = (sum(good_endpoint))/number_of_targets) %>%
+  filter(perc_non_consec < .1) %>%
+  filter(perc_good_endpoint >.9) %>%
+  filter(is_endpoint == TRUE) %>%
+  filter(good_endpoint == TRUE) %>%
+  filter(non_consec == FALSE)
+for (i in 1:length(d.3cond$none_checked)) {
+   if (d.3cond$none_checked[i] == TRUE & (!is.na(d.3cond$none_checked[i]))){
+   d.3cond$num_checked[i] = 0
+   }
+ }
+```
+
+
+```{r}
+#read in norming data. Condition 1 - photos, condition 2 - cartoons, condition 3 - words
+path_norm <- "D:/Dropbox/School/more adjs/experiment 1b/analysis-all/norming/"
+files_norm <- dir("D:/Dropbox/School/more adjs/experiment 1b/analysis-all/norming/anonymized-results/", 
+             pattern = "*.json")
+d.raw.norm <- data.frame()
+
+NUM_TRIALS <- 48
+
+for (f in files_norm) {
+  jf <- paste0(path_norm, "anonymized-results/",f)
+  jd <- fromJSON(file = jf)
+  NUM_TARGETS <- NUM_TRIALS
+  id <- data.frame(subid = f,
+                   number_of_trials = NUM_TRIALS,
+                   noun = jd$answers$data$noun,
+                   condition = as.numeric(jd$answers$data$expt_condition),
+                   rating = as.numeric(jd$answers$data$rating),
+                   prototype_status = jd$answers$data$prototype_status,
+                   workerid = jd$WorkerId,
+                   language = tolower(jd$answers$data$lang),
+                   gender = jd$answers$data$gender,
+                   comments = jd$answers$data$expt_gen,
+                   screen_size = as.numeric(jd$answers$data$screen_size))
+                    
+                  
+  d.raw.norm <- bind_rows(d.raw.norm, id)
+}
+
+target = c('elephant', 'hippo', 'house', 'plane','baby', 'duckling', 'gnome', 'bunny','chick', 'mouse', 'balloon', 'cake', 'monkey', 'umbrella', 'ant', 'bean', 'candy', 'hazelnut', 'earring', 'fly', 'blueberry', 'seed', 'ladybug', 'pill', 'pin', 'tack')
+
+d.raw.norm$type[d.raw.norm$noun %in% target] <- "targ"
+d.raw.norm$type[!d.raw.norm$noun %in% target] <- "control"
+
+```
+
+```{r}
+#filter out people on very small screens and non-English speakers
+d.norm <- d.raw.norm %>%
+  filter(as.numeric(screen_size) >= 12) %>%
+  filter(str_detect(language, 'eng')) %>%
+  select(-language) %>%
+  group_by(subid)
+```
+
+```{r}
+#exclude participants with more than 6 trials deviating from more than 2 sds from the mean for the prototype status category of the object.
+d_var <- d.norm %>%
+  group_by(prototype_status) %>%
+  summarise(mean = mean(rating), sds = sd(rating))
+d.norm <- d.norm %>%
+  left_join(d_var)%>%
+  mutate(dist = abs((mean - rating)/sds), excl = dist>=2)
+  
+
+d_people <- d.norm %>%
+  group_by(subid)%>%
+  summarise(exclusions = sum(excl)) %>%
+  arrange(exclusions)
+
+d.norm<- d.norm %>%
+  left_join(d_people)
+
+d_noexc <- d.norm%>%
+  filter(exclusions <6)%>%
+  filter(!excl)
+
+length(unique(d_noexc$workerid))
+
+d.norm.means <- d.norm %>%
+  filter(type=="targ")%>%
+  group_by(noun,condition) %>%
+  summarise(mean = mean(rating))
+```
+
+```{r}
+summary(d.rep)
+d.rep = droplevels(d.rep)
+d.rep$fac_num_checked = as.factor(as.character(d.rep$num_checked))
+mean_size = d.norm.means %>%
+  filter(condition == 2)%>%
+  select(-condition)
+d.rep = d.rep %>%
+  left_join(mean_size,by=c("noun"))
+
+d.rep$noun = as.factor(d.rep$noun)
+d.rep.are = d.rep %>%
+  filter(verb == "are")
+m = clmm(fac_num_checked ~ adj*prototype_status + dir + quest_order + (1+adj|noun) + (1+adj*prototype_status|subid), data=d.rep.are)
+#m = clmm(fac_num_checked ~ adj*prototype_status + dir + quest_order + (1+adj|noun) + (1|subid), data=d)
+summary(m)
+save(m,file = "m.rda")
+load("m.rda")
+
+
+#attampts to put together a model that incorporates verb as an effect (are, find, seem)
+#clmm(fac_num_checked ~ adj*prototype_status + verb + dir + quest_order + (1+adj|noun) + (1+adj*prototype_status|subid), data=d.rep) did not converge
+m.allvs.simp = clmm(fac_num_checked ~ adj*prototype_status + verb + dir + quest_order + (1+adj|noun) + (1|subid), data=d.rep)
+summary(m.allvs.simp)
+save(m.allvs.simp,file = "m.allvs.simp.rda")
+load("m.allvs.simp.rda")
+
+
+#m.simple = clmm(fac_num_checked ~ adj*prototype_status - prototype_status + dir + quest_order + (1+adj|noun) + (1|subid), data=d)
+#summary(m.simple)
+
+
+
+m.norm = clmm(fac_num_checked ~ adj*mean + dir + quest_order + (1+adj|noun) + (1+adj|subid), data=d.rep.are)
+summary(m.norm)
+save(m.norm,file = "m.norm.rda")
+load("m.norm.rda")
+#doesn't converge, also didn't converge with just adj as a slope for subid
+#m.norm1 = clmm(fac_num_checked ~ adj*mean + dir + quest_order + (1+adj|noun) + (1+adj*mean|subid), data=d.rep.are)
+#summary(m.norm1)
+
+m.allvs.simp.norm = clmm(fac_num_checked ~ adj*mean + verb + dir + quest_order + (1+adj|noun) + (1|subid), data=d.rep)
+summary(m.allvs.simp.norm)
+save(m.allvs.simp.norm,file = "m.allvs.simp.norm.rda")
+load("m.allvs.simp.norm.rda")
+#m.simple = clmm(fac_num_checked ~ adj*mean - mean + dir + quest_order + (1+adj|noun) + (1|subid), data=d)
+#summary(m.simple)
+```
+
+```{r}
+summary(d.rev)
+d.rev = droplevels(d.rev)
+d.rev$fac_num_checked = as.factor(as.character(d.rev$num_checked))
+
+m.rev = clmm(fac_num_checked ~ adj + dir + quest_order + (1+adj|noun) + (1+adj|subid), data=d.rev)
+#m = clmm(fac_num_checked ~ adj*prototype_status + dir + quest_order + (1+adj|noun) + (1|subid), data=d)
+summary(m.rev)
+save(m.rev,file = "m.rev.rda")
+load("m.rev.rda")
+
+
+
+#m.simple = clmm(fac_num_checked ~ adj*prototype_status - prototype_status + dir + quest_order + (1+adj|noun) + (1|subid), data=d)
+#summary(m.simple)
+
+mean_size = d.norm.means %>%
+  filter(condition == 1)%>%
+  select(-condition)
+d.rev = d.rev %>%
+  left_join(mean_size,by=c("noun"))
+
+m.rev.norm = clmm(fac_num_checked ~ adj*mean + dir + quest_order + (1+adj|noun) + (1+adj|subid), data=d.rev)
+summary(m.rev.norm)
+save(m.rev.norm,file = "m.rev.norm.rda")
+load("m.rev.norm.rda")
+
+m.rev.norm1 = clmm(fac_num_checked ~ adj*mean + dir + quest_order + (1+adj|noun) + (1|subid), data=d.rev)
+summary(m.rev.norm1)
+save(m.rev.norm1, file = "m.rev.norm1.rda")
+load("m.rev.norm1.rda")
+
+#m.simple = clmm(fac_num_checked ~ adj*mean - mean + dir + quest_order + (1+adj|noun) + (1|subid), data=d)
+#summary(m.simple)
+```
+
+```{r}
+summary(d.3cond)
+d.3cond = droplevels(d.3cond)
+d.3cond$fac_num_checked = as.factor(as.character(d.3cond$num_checked))
+
+mean_size = d.norm.means %>%
+  filter(condition == 2)%>%
+  select(-condition)
+d.3cond = d.3cond %>%
+  left_join(mean_size,by=c("noun"))
+
+d.3cond.ordphot = d.3cond %>%
+  filter(condition == 1)
+
+m.ordphot = clmm(fac_num_checked ~ adj*prototype_status + dir + quest_order + (1+adj|noun) + (1+adj*prototype_status|subid), data=d.3cond.ordphot)
+summary(m.ordphot)
+save(m.ordphot,file = "m.ordphot.rda")
+load("m.ordphot.rda")
+
+#also does not converge
+#m.ordphot1 = clmm(fac_num_checked ~ adj*prototype_status + dir + quest_order + (1+adj|noun) + (1+adj|subid) + (0+prototype_status|subid) + (0+adj:prototype_status|subid), data=d.3cond.ordphot, verbose=TRUE)
+#summary(m.ordphot1)
+#save(m.ordphot1,file = "m.ordphot1.rda")
+#load("m.ordphot1.rda")
+#since the other one gives NAs instead of stats I'm going to try simplifying the random effects
+m.ordphot.simp = clmm(fac_num_checked ~ adj*prototype_status + dir + quest_order + (1+adj|noun) + (1+adj|subid), data=d.3cond.ordphot)
+summary(m.ordphot.simp)
+save(m.ordphot.simp,file = "m.ordphot.simp.rda")
+load("m.ordphot.simp.rda")
+
+
+d.3cond.ranphot = d.3cond %>%
+  filter(condition == 2)
+m.ranphot = clmm(fac_num_checked ~ adj*prototype_status + quest_order + (1+adj|noun) + (1+adj*prototype_status|subid), data=d.3cond.ranphot)
+summary(m.ranphot)
+save(m.ranphot,file = "m.ranphot.rda")
+load("m.ranphot.rda")
+
+d.3cond.rantiny = d.3cond %>%
+  filter(condition == 3)
+m.rantiny = clmm(fac_num_checked ~ adj + quest_order + (1+adj|noun) + (1+adj|subid), data=d.3cond.rantiny)
+summary(m.rantiny)
+save(m.rantiny,file = "m.rantiny.rda")
+load("m.rantiny.rda")
+
+
+
+m.ordphot.norm = clmm(fac_num_checked ~ adj*mean + dir + quest_order + (1+adj|noun) + (1+adj|subid), data=d.3cond.ordphot)
+summary(m.ordphot.norm)
+save(m.ordphot.norm,file = "m.ordphot.norm.rda")
+load("m.ordphot.norm.rda")
+
+m.ranphot.norm = clmm(fac_num_checked ~ adj*mean + quest_order + (1+adj|noun) + (1+adj|subid), data=d.3cond.ranphot)
+summary(m.ranphot.norm)
+save(m.ranphot.norm, file = "m.ranphot.norm.rda")
+load("m.ranphot.norm.rda")
+
+m.rantiny.norm = clmm(fac_num_checked ~ adj*mean + quest_order + (1+adj|noun) + (1+adj|subid), data=d.3cond.rantiny)
+summary(m.rantiny.norm)
+save(m.rantiny.norm,file ="m.rantiny.norm.rda")
+load("m.rantiny.norm.rda")
+
+#other version of random effects structure with interaction between adjective and mean (is that a thing?) -only the third one converged
+# m.ordphot.norm1 = clmm(fac_num_checked ~ adj*mean + dir + quest_order + (1+adj|noun) + (1+adj*mean|subid), data=d.3cond.ordphot)
+# summary(m.ordphot.norm1)
+# 
+# m.ranphot.norm1 = clmm(fac_num_checked ~ adj*mean + quest_order + (1+adj|noun) + (1+adj*mean|subid), data=d.3cond.ranphot)
+# summary(m.ranphot.norm1)
+
+m.rantiny.norm1 = clmm(fac_num_checked ~ adj*mean + quest_order + (1+adj|noun) + (1+adj*mean|subid), data=d.3cond.rantiny)
+summary(m.rantiny.norm1)
+save(m.rantiny.norm1,file = "m.rantiny.norm1.rda")
+load("m.rantiny.norm1.rda")
+
+
+
+```
+```{r}
+#Models for all experiments with factors releveled so that small is the base.
+d.rep$protr<- d.rep$prototype_status %>%
+  relevel("small")
+d.rep.are <- d.rep %>%
+  filter(verb == "are")
+
+d.3cond.ordphot$protr <- as.factor(d.3cond.ordphot$prototype_status) %>%
+  relevel("small")
+d.3cond.ranphot$protr <- as.factor(d.3cond.ranphot$prototype_status) %>%
+  relevel("small")
+
+m.relev = clmm(fac_num_checked ~ adj*protr + dir + quest_order + (1+adj|noun) + (1+adj*protr|subid), data=d.rep.are)
+
+summary(m.relev)
+save(m.relev,file = "m.relev.rda")
+load("m.relev.rda")
+
+
+m.allvs.simp.relev = clmm(fac_num_checked ~ adj*protr + verb + dir + quest_order + (1+adj|noun) + (1|subid), data=d.rep)
+summary(m.allvs.simp.relev)
+save(m.allvs.simp.relev,file = "m.allvs.simp.relev.rda")
+load("m.allvs.simp.relev.rda")
+
+m.ordphot.relev = clmm(fac_num_checked ~ adj*protr + dir + quest_order + (1+adj|noun) + (1+adj*protr|subid), data=d.3cond.ordphot)
+summary(m.ordphot.relev)
+save(m.ordphot.relev,file = "m.ordphot.relev.rda")
+load("m.ordphot.relev.rda")
+
+
+#since the other one gives NAs instead of stats I'm going to try simplifying the random effects
+m.ordphot.simp.relev = clmm(fac_num_checked ~ adj*protr + dir + quest_order + (1+adj|noun) + (1+adj|subid), data=d.3cond.ordphot)
+summary(m.ordphot.simp.relev)
+save(m.ordphot.simp.relev,file = "m.ordphot.simp.relev.rda")
+load("m.ordphot.simp.relev.rda")
+
+
+m.ranphot.relev = clmm(fac_num_checked ~ adj*protr + quest_order + (1+adj|noun) + (1+adj*protr|subid), data=d.3cond.ranphot)
+summary(m.ranphot.relev)
+save(m.ranphot.relev,file = "m.ranphot.relev.rda")
+load("m.ranphot.relev.rda")
+
+
+```
+
+```{r}
+#Original code from Judith meeting
+summary(d)
+d = droplevels(d)
+d$fac_num_checked = as.factor(as.character(d$num_checked))
+m = clmm(fac_num_checked ~ adj*prototype_status + dir + quest_order + (1+adj|noun) + (1+adj*prototype_status|subid), data=d)
+m = clmm(fac_num_checked ~ adj*prototype_status + dir + quest_order + (1+adj|noun) + (1|subid), data=d)
+summary(m)
+
+m.simple = clmm(fac_num_checked ~ adj*prototype_status - prototype_status + dir + quest_order + (1+adj|noun) + (1|subid), data=d)
+summary(m.simple)
+
+mean_size = read.csv("D:/Dropbox/School/more\ adjs/experiment\ 1b/norming/means-cartoons.csv") %>%
+  select(-condition)
+d = d %>%
+  left_join(mean_size,by=c("noun"))
+
+m = clmm(fac_num_checked ~ adj*mean + dir + quest_order + (1+adj|noun) + (1|subid), data=d)
+summary(m)
+
+m.simple = clmm(fac_num_checked ~ adj*mean - mean + dir + quest_order + (1+adj|noun) + (1|subid), data=d)
+summary(m.simple)
+```
+
