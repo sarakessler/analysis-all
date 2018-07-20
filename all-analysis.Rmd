@@ -136,6 +136,10 @@ for (f in files_bunny) {
 
 ```{r}
 #filters out non native speakers, screens under 12 inches, people with too many non-consecutive or no endpoint trials, and all non-consecutive, no endpoint or wrong endpoint trials.
+num_trials = 48
+
+table(as.factor(d.raw.bunny$language))
+
 d.bunny <- filter(d.raw.bunny, prototype_status != "na") %>%
   filter(as.numeric(screen_size) >= 12) %>%
   filter(str_detect(language, 'eng')) %>%
@@ -432,6 +436,57 @@ save(m.allvs.simp.norm,file = "m.allvs.simp.norm.rda")
 load("m.allvs.simp.norm.rda")
 #m.simple = clmm(fac_num_checked ~ adj*mean - mean + dir + quest_order + (1+adj|noun) + (1|subid), data=d)
 #summary(m.simple)
+```
+
+```{r}
+summary(d.bunny)
+d.bunny = droplevels(d.bunny)
+d.bunny$fac_num_checked = as.factor(as.character(d.bunny$num_checked))
+mean_size = d.norm.means %>%
+  filter(condition == 2)%>%
+  select(-condition)
+d.bunny = d.bunny %>%
+  left_join(mean_size,by=c("noun"))
+
+d.bunny$noun = as.factor(d.bunny$noun)
+
+m.bunny = clmm(fac_num_checked ~ adj*prototype_status + dir + quest_order + (1+adj|noun) + (1+adj*prototype_status|subid), data=d.bunny)
+#m = clmm(fac_num_checked ~ adj*prototype_status + dir + quest_order + (1+adj|noun) + (1|subid), data=d)
+summary(m.bunny)
+save(m.bunny,file = "m.bunny.rda")
+load("m.bunny.rda")
+
+
+
+
+
+m.bunny.simple = clmm(fac_num_checked ~ adj*prototype_status + dir + quest_order + (1+adj|noun) + (1|subid), data=d.bunny)
+summary(m.bunny.simple)
+save(m.bunny.simple,file = "m.bunny.simple.rda")
+load("m.bunny.simple.rda")
+
+
+
+m.bunny.norm = clmm(fac_num_checked ~ adj*mean + dir + quest_order + (1+adj|noun) + (1+adj|subid), data=d.bunny)
+summary(m.bunny.norm)
+save(m.bunny.norm,file = "m.bunny.norm.rda")
+load("m.bunny.norm.rda")
+
+m.bunny.norm1 = clmm(fac_num_checked ~ adj*mean + dir + quest_order + (1+adj|noun) + (1+adj*mean|subid), data=d.bunny)
+summary(m.bunny.norm1)
+save(m.bunny.norm1, file = "m.bunny.norm1.rda")
+load("m.bunny.norm1.rda")
+
+
+d.bunny$protr<- d.bunny$prototype_status %>%
+  relevel("small")
+
+m.bunny.relev = clmm(fac_num_checked ~ adj*protr + dir + quest_order + (1+adj|noun) + (1+adj*protr|subid), data=d.bunny)
+
+summary(m.bunny.relev)
+save(m.bunny.relev,file = "m.bunny.relev.rda")
+load("m.bunny.relev.rda")
+
 ```
 
 ```{r}

@@ -1,7 +1,53 @@
-"0","library(AICcmodavg)
+"0","library(tidyverse)
 "
-"2","Error in loadNamespace(j <- i[[1L]], c(lib.loc, .libPaths()), versionCheck = vI[[j]]) : 
-  there is no package called â€˜VGAMâ€™
+"2","Loading tidyverse: ggplot2
+Loading tidyverse: tibble
+Loading tidyverse: tidyr
+Loading tidyverse: readr
+Loading tidyverse: purrr
+Loading tidyverse: dplyr
 "
-"2","Error: package or namespace load failed for â€˜AICcmodavgâ€™
+"0","library(stringr)"
+"0","library(rjson)"
+"0","library(ordinal)"
+"2","
+Attaching package: ‘ordinal’
+
 "
+"2","The following object is masked from ‘package:dplyr’:
+
+    slice
+
+"
+"0","library(coin)"
+"2","Loading required package: survival
+"
+"0","library(lme4)"
+"2","Loading required package: Matrix
+"
+"2","
+Attaching package: ‘Matrix’
+
+"
+"2","The following object is masked from ‘package:tidyr’:
+
+    expand
+
+"
+"2","
+Attaching package: ‘lme4’
+
+"
+"2","The following objects are masked from ‘package:ordinal’:
+
+    ranef, VarCorr
+
+"
+"0","#library(AICcmodavg)"
+"0","sem <- function(x) {sd(x, na.rm=TRUE) / sqrt(length(x))}"
+"0","ci95 <- function(x) {sem(x) * 1.96}"
+"0","addnas <- function (x) {if (length(x)==0){"
+"0","  result = NA"
+"0","} else {result = x}"
+"0","  return(result)"
+"0","}"
