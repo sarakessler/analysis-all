@@ -48,6 +48,7 @@ for (f in files_rep) {
                    workerid = jd$WorkerId,
                    language = tolower(jd$answers$data$lang),
                    gender = jd$answers$data$gender,
+                   age = jd$answers$data$age,
                    prototype_status = jd$answers$data$prototype_status,
                    non_consec = jd$answers$data$non_consecutive,
                    is_endpoint = jd$answers$data$is_endpoint,
@@ -71,6 +72,8 @@ for (i in 1:length(d.raw.rep$language)) {
    }
 }
 num_trials = 48
+
+table(as.factor(d.raw.rep$age))/50
 
 #filters out non native speakers, screens under 12 inches, people with too many non-consecutive or no endpoint trials, and all non-consecutive, no endpoint or wrong endpoint trials.
 d.rep <- filter(d.raw.rep, prototype_status != "na") %>%
@@ -101,6 +104,7 @@ files_bunny <- dir("D:/Dropbox/School/more adjs/experiment 1b/analysis-all/Trib2
              pattern = "*.json")
 
 NUM_TRIALS <- 50
+NUM_TARGETS <- 48
 d.raw.bunny <- data.frame()
 
 for (f in files_bunny) {
@@ -109,13 +113,15 @@ for (f in files_bunny) {
   id <- data.frame(subid = f,
                    exp_name = "bunny",
                    unique_id = paste0("bunny_", f),
+                   condition = "NA",
+                   number_of_trials = NUM_TRIALS,
+                   number_of_targets = NUM_TARGETS,
                    adj = jd$answers$data$adj,
                    verb = jd$answers$data$verb,
                    noun = jd$answers$data$noun,
                    dir = jd$answers$data$dir,
                    num_checked = as.numeric(jd$answers$data$num_checked),
                    quest_order = c(1:NUM_TRIALS),
-                   noun = jd$answers$data$noun,
                    elapsed_ms = jd$answers$data$elapsed_ms,
                    elapsed_first_click_ms = jd$answers$data$elapsed_first_click_ms,
                    workerid = jd$WorkerId,
@@ -127,6 +133,8 @@ for (f in files_bunny) {
                    endpoint = as.character(unlist(jd$answers$data$endpoint)),
                    good_endpoint = jd$answers$data$good_ep,
                    none_checked = jd$answers$data$none_checked,
+                   all_checked = "NA",
+                   comments = jd$answers$data$expt_gen,
                    screen_size = as.numeric(jd$answers$data$screen_size))
                     
                   
@@ -478,14 +486,6 @@ save(m.bunny.norm1, file = "m.bunny.norm1.rda")
 load("m.bunny.norm1.rda")
 
 
-d.bunny$protr<- d.bunny$prototype_status %>%
-  relevel("small")
-
-m.bunny.relev = clmm(fac_num_checked ~ adj*protr + dir + quest_order + (1+adj|noun) + (1+adj*protr|subid), data=d.bunny)
-
-summary(m.bunny.relev)
-save(m.bunny.relev,file = "m.bunny.relev.rda")
-load("m.bunny.relev.rda")
 
 ```
 
@@ -602,12 +602,16 @@ load("m.rantiny.norm1.rda")
 
 
 ```
+
 ```{r}
 #Models for all experiments with factors releveled so that small is the base.
 d.rep$protr<- d.rep$prototype_status %>%
   relevel("small")
 d.rep.are <- d.rep %>%
   filter(verb == "are")
+
+d.bunny$protr<- d.bunny$prototype_status %>%
+  relevel("small")
 
 d.3cond.ordphot$protr <- as.factor(d.3cond.ordphot$prototype_status) %>%
   relevel("small")
@@ -625,6 +629,14 @@ m.allvs.simp.relev = clmm(fac_num_checked ~ adj*protr + verb + dir + quest_order
 summary(m.allvs.simp.relev)
 save(m.allvs.simp.relev,file = "m.allvs.simp.relev.rda")
 load("m.allvs.simp.relev.rda")
+
+
+
+
+m.bunny.relev = clmm(fac_num_checked ~ adj*protr + dir + quest_order + (1+adj|noun) + (1+adj*protr|subid), data=d.bunny)
+summary(m.bunny.relev)
+save(m.bunny.relev,file = "m.bunny.relev.rda")
+load("m.bunny.relev.rda")
 
 m.ordphot.relev = clmm(fac_num_checked ~ adj*protr + dir + quest_order + (1+adj|noun) + (1+adj*protr|subid), data=d.3cond.ordphot)
 summary(m.ordphot.relev)
@@ -645,6 +657,178 @@ save(m.ranphot.relev,file = "m.ranphot.relev.rda")
 load("m.ranphot.relev.rda")
 
 
+```
+
+```{r}
+#Models for all experiments with planned orthogonal contrasts so that the average overall of adj-BIG is compared to average overall of adj-SMALL (i.e.big zone vs. small zone) and then within each adj, prototypiclly big is compared to the average of the other two, and neither is compared to prototypically small.
+newcontrasts = as.matrix(data.frame("adj.SMALL.minus.BIG"=c(-1,-1,-1,1,1,1), "BIG.big.minus.other"=c(2,-1,-1,0,0,0), "BIG.neither.minus.small"=c(0,1,-1,0,0,0), "SMALL.big.minus.other"=c(0,0,0,2,-1,-1), "SMALL.neither.minus.small"=c(0,0,0,0,1,-1)))
+rownames(newcontrasts) = c("BIG.big", "BIG.neither", "BIG.small", "SMALL.big", "SMALL.neither", "SMALL.small")
+
+newcontrasts[,1] = newcontrasts[,1] *1/2
+newcontrasts[,2] = newcontrasts[,2] *2/3
+newcontrasts[,3] = newcontrasts[,3] *1/2
+newcontrasts[,4] = newcontrasts[,4] *2/3
+newcontrasts[,5] = newcontrasts[,5] *1/2
+
+d.rep$protr<- d.rep$prototype_status %>%
+  relevel("small")
+d.rep$adj.protr = factor(paste(toupper(d.rep$adj), d.rep$protr, sep="."))
+contrasts(d.rep$adj.protr) = newcontrasts
+d.rep.are <- d.rep %>%
+  filter(verb == "are")
+
+d.bunny$protr<- d.bunny$prototype_status %>%
+  relevel("small")
+d.bunny$adj.protr = factor(paste(toupper(d.bunny$adj), d.bunny$protr, sep="."))
+contrasts(d.bunny$adj.protr) = newcontrasts
+
+
+
+d.3cond.ordphot$protr <- as.factor(d.3cond.ordphot$prototype_status) %>%
+  relevel("small")
+d.3cond.ordphot$adj.protr = factor(paste(toupper(d.3cond.ordphot$adj), d.3cond.ordphot$protr, sep="."))
+contrasts(d.3cond.ordphot$adj.protr) = newcontrasts
+d.3cond.ranphot$protr <- as.factor(d.3cond.ranphot$prototype_status) %>%
+  relevel("small")
+d.3cond.ranphot$adj.protr = factor(paste(toupper(d.3cond.ranphot$adj), d.3cond.ranphot$protr, sep="."))
+contrasts(d.3cond.ranphot$adj.protr) = newcontrasts
+
+
+
+m.relev.newcontrasts = clmm(fac_num_checked ~ adj.protr + dir + quest_order + (1+adj|noun) + (1+adj*protr|subid), data=d.rep.are)
+
+summary(m.relev.newcontrasts)
+save(m.relev.newcontrasts,file = "m.relev.newcontrasts.rda")
+load("m.relev.newcontrasts.rda")
+
+
+m.allvs.simp.relev.newcontrasts = clmm(fac_num_checked ~ adj.protr + verb + dir + quest_order + (1+adj|noun) + (1|subid), data=d.rep)
+summary(m.allvs.simp.relev.newcontrasts)
+save(m.allvs.simp.relev.newcontrasts,file = "m.allvs.simp.relev.newcontrasts.rda")
+load("m.allvs.simp.relev.newcontrasts.rda")
+
+
+
+m.bunny.relev.newcontrasts = clmm(fac_num_checked ~ adj.protr + dir + quest_order + (1+adj|noun) + (1+adj*protr|subid), data=d.bunny)
+
+summary(m.bunny.relev.newcontrasts)
+save(m.bunny.relev.newcontrasts,file = "m.bunny.relev.newcontrasts.rda")
+load("m.bunny.relev.newcontrasts.rda")
+
+m.ordphot.relev.newcontrasts = clmm(fac_num_checked ~ adj.protr + dir + quest_order + (1+adj|noun) + (1+adj.protr|subid), data=d.3cond.ordphot)
+summary(m.ordphot.relev.newcontrasts)
+save(m.ordphot.relev.newcontrasts,file = "m.ordphot.relev.newcontrasts.rda")
+load("m.ordphot.relev.newcontrasts.rda")
+
+
+#since the other one gives NAs instead of stats I'm going to try simplifying the random effects
+m.ordphot.simp.relev.newcontrasts = clmm(fac_num_checked ~ adj.protr + dir + quest_order + (1+adj|noun) + (1+adj|subid), data=d.3cond.ordphot)
+summary(m.ordphot.simp.relev.newcontrasts)
+save(m.ordphot.simp.relev.newcontrasts,file = "m.ordphot.simp.relev.newcontrasts.rda")
+load("m.ordphot.simp.relev.newcontrasts.rda")
+
+
+m.ranphot.relev.newcontrasts = clmm(fac_num_checked ~ adj.protr + quest_order + (1+adj|noun) + (1+adj.protr|subid), data=d.3cond.ranphot)
+summary(m.ranphot.relev.newcontrasts)
+save(m.ranphot.relev.newcontrasts,file = "m.ranphot.relev.newcontrasts.rda")
+load("m.ranphot.relev.newcontrasts.rda")
+
+d.3cond.ordphot.noall <- d.3cond.ordphot %>%
+  select(-all_checked)
+d.imagecomp <- d.bunny %>%
+  select(-all_checked) %>%
+  union(d.3cond.ordphot.noall)
+d.imagecomp$fac_num_checked = as.factor(as.character(d.imagecomp$fac_num_checked))
+d.imagecomp$fac_exp_name = as.factor(as.character(d.imagecomp$exp_name))
+d.imagecomp$protr<- as.factor(as.character(d.imagecomp$prototype_status)) %>%
+  relevel("small")
+d.imagecomp$adj.protr = factor(paste(toupper(d.imagecomp$adj), d.imagecomp$protr, sep="."))
+contrasts(d.imagecomp$adj.protr) = newcontrasts
+
+#didn't converge with adj.protr or adj*protr or adj in subid random effects
+m.imagecomp = clmm(fac_num_checked ~ adj.protr*fac_exp_name + dir + quest_order + (1+adj*fac_exp_name|noun) + (1|subid), data=d.imagecomp)
+summary(m.imagecomp)
+save(m.imagecomp,file = "m.imagecomp.rda")
+load("m.imagecomp.rda")
+
+m.imagecomp.simp = clmm(fac_num_checked ~ adj.protr*fac_exp_name + dir + quest_order + (1+adj*fac_exp_name|noun) + (1|subid), data=d.imagecomp)
+summary(m.imagecomp.simp)
+save(m.imagecomp.simp,file = "m.imagecomp.simp.rda")
+load("m.imagecomp.simp.rda")
+
+```
+
+```{r}
+#Nested models to compare results when using real size norming to when using prototype status
+
+m.relev.newcontrasts.wnorm = clmm(fac_num_checked ~ adj.protr*mean + dir + quest_order + (1+adj|noun) + (1+adj.protr+mean|subid), data=d.rep.are)
+summary(m.relev.newcontrasts.wnorm)
+save(m.relev.newcontrasts.wnorm,file = "m.relev.newcontrasts.wnorm.rda")
+load("m.relev.newcontrasts.wnorm.rda")
+
+load("m.relev.newcontrasts.rda")
+summary(m.relev.newcontrasts)
+
+load("m.norm.rda")
+summary(m.norm)
+anova(m.relev.newcontrasts.wnorm, m.relev.newcontrasts, test="Chisq")
+anova(m.relev.newcontrasts.wnorm, m.norm, test="Chisq")
+
+m.allvs.simp.relev.newcontrasts.wnorm = clmm(fac_num_checked ~ adj.protr*mean + verb + dir + quest_order + (1+adj|noun) + (1|subid), data=d.rep)
+summary(m.allvs.simp.relev.newcontrasts.wnorm)
+save(m.allvs.simp.relev.newcontrasts.wnorm,file = "m.allvs.simp.relev.newcontrasts.wnorm.rda")
+load("m.allvs.simp.relev.newcontrasts.wnorm.rda")
+
+load("m.allvs.simp.relev.newcontrasts.rda")
+summary(m.allvs.simp.relev.newcontrasts)
+
+load("m.allvs.simp.norm.rda")
+summary(m.allvs.simp.norm)
+
+anova(m.allvs.simple.relev.newcontrasts.wnorm, m.allvs.simple.relev.newcontrasts, test="Chisq")
+anova(m.allvs.simple.relev.newcontrasts.wnorm, m.allvs.simple.norm, test="Chisq")
+
+m.bunny.relev.newcontrasts.wnorm = clmm(fac_num_checked ~ adj.protr*mean + dir + quest_order + (1+adj|noun) + (1+adj*protr+mean|subid), data=d.bunny)
+summary(m.bunny.relev.newcontrasts.wnorm)
+save(m.bunny.relev.newcontrasts.wnorm,file = "m.bunny.relev.newcontrasts.wnorm.rda")
+load("m.bunny.relev.newcontrasts.wnorm.rda")
+
+load("m.bunny.relev.newcontrasts.rda")
+summary(m.bunny.relev.newcontrasts)
+
+load("m.bunny.norm.rda")
+summary(m.bunny.norm)
+
+anova(m.bunny.relev.newcontrasts.wnorm, m.bunny.relev.newcontrasts, test="Chisq")
+anova(m.bunny.relev.newcontrasts.wnorm, m.bunny.norm, test="Chisq")
+
+m.ordphot.relev.newcontrasts.wnorm = clmm(fac_num_checked ~ adj.protr*mean + dir + quest_order + (1+adj|noun) + (1+adj.protr*mean|subid), data=d.3cond.ordphot)
+summary(m.ordphot.relev.newcontrasts.wnorm)
+save(m.ordphot.relev.newcontrasts.wnorm,file = "m.ordphot.relev.newcontrasts.wnorm.rda")
+load("m.ordphot.relev.newcontrasts.wnorm.rda")
+
+load("m.ordphot.relev.newcontrasts.rda")
+summary(m.ordphot.relev.newcontrasts)
+
+load("m.ordphot.norm.rda")
+summary(m.ordphot.norm)
+
+anova(m.ordphot.relev.newcontrasts.wnorm, m.ordphot.relev.newcontrasts, test="Chisq")
+anova(m.ordphot.relev.newcontrasts.wnorm, m.ordphot.norm, test="Chisq")
+
+m.ranphot.relev.newcontrasts.wnorm = clmm(fac_num_checked ~ adj.protr*mean + quest_order + (1+adj|noun) + (1+adj.protr*mean|subid), data=d.3cond.ranphot)
+summary(m.ranphot.relev.newcontrasts.wnorm)
+save(m.ranphot.relev.newcontrasts.wnorm,file = "m.ranphot.relev.newcontrasts.wnorm.rda")
+load("m.ranphot.relev.newcontrasts.wnorm.rda")
+
+load("m.ranphot.relev.newcontrasts.rda")
+summary(m.ranphot.relev.newcontrasts)
+
+load("m.ranphot.norm.rda")
+summary(m.ranphot.norm)
+
+anova(m.ranphot.relev.newcontrasts.wnorm, m.ranphot.relev.newcontrasts, test="Chisq")
+anova(m.ranphot.relev.newcontrasts.wnorm, m.ranphot.norm, test="Chisq")
 ```
 
 ```{r}
